@@ -4,7 +4,6 @@ import { SerialPanel } from './components/SerialPanel';
 import { SignalAnalytics } from './components/SignalAnalytics';
 import { SurveyPlanner } from './components/SurveyPlanner';
 import { DataManagementView } from './components/DataManagementView';
-import { ReviewPresentationView } from './components/ReviewPresentationView';
 import { api } from './services/api';
 import type {
   AnalyticsSummary,
@@ -18,7 +17,7 @@ import type {
   ValidationResult,
 } from './types';
 
-type ActiveView = 'map' | 'analytics' | 'survey' | 'devices' | 'presentation';
+type ActiveView = 'map' | 'analytics' | 'survey' | 'devices';
 
 export const App: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('map');
@@ -161,13 +160,6 @@ export const App: React.FC = () => {
             onClick={() => setActiveView('devices')}
           >
             Devices & Data
-          </button>
-          <button
-            className={`nav-pill ${activeView === 'presentation' ? 'active' : ''}`}
-            onClick={() => setActiveView('presentation')}
-            style={{ background: activeView === 'presentation' ? '#2563eb' : 'rgba(37, 99, 235, 0.2)', color: activeView === 'presentation' ? 'white' : '#60a5fa', borderColor: '#3b82f6' }}
-          >
-            📊 Mid-Review PPT
           </button>
         </nav>
 
@@ -350,11 +342,6 @@ export const App: React.FC = () => {
             onSelectSession={setActiveSessionId}
             onRefreshData={() => loadAllData(activeSessionId, interpMethod)}
           />
-        )}
-
-        {/* VIEW 5: Mid-Project Review PPT & Academic Deliverables */}
-        {activeView === 'presentation' && (
-          <ReviewPresentationView />
         )}
       </main>
     </>
