@@ -1,0 +1,11 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+pyserial==3.5
+pydantic==2.11.7
+python-multipart==0.0.20
+websockets==15.0.1
+numpy==2.2.6
+scipy==1.15.3
+pandas==2.2.3
+pytest==8.4.1
+httpx==0.28.1

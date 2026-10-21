@@ -1,0 +1,21 @@
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+.next/
+*.tsbuildinfo
+.DS_Store
+
+# Python / Backend
+__pycache__/
+*.py[cod]
+*$py.class
+backend/.venv/
+.venv/
+venv/
+.pytest_cache/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
