@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Heatmap2D } from './components/Heatmap2D';
-import { SerialPanel } from './components/SerialPanel';
+import { LiveSerialPanel } from './components/LiveSerialPanel';
 import { SignalAnalytics } from './components/SignalAnalytics';
 import { SurveyPlanner } from './components/SurveyPlanner';
 import { DataManagementView } from './components/DataManagementView';
 import { api } from './services/api';
+import { buildLiveView } from './services/liveData';
 import type {
   AnalyticsSummary,
   HeatmapData,
   LocationSummary,
-  PortInfo,
   RSSIMeasurement,
   SerialStatus,
   SessionInfo,
@@ -24,7 +24,11 @@ export const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
-  // System states
+  // Data Source Mode: explicit separation of demo vs live hardware
+  const [dataSource, setDataSource] = useState<'demo' | 'live'>('demo');
+  const [liveMeasurements, setLiveMeasurements] = useState<RSSIMeasurement[]>([]);
+
+  // Hardware serial state
   const [serialStatus, setSerialStatus] = useState<SerialStatus>({
     connected: false,
     port: null,
@@ -34,9 +38,8 @@ export const App: React.FC = () => {
     firmware_version: '',
     last_message_at: null,
   });
-  const [ports, setPorts] = useState<PortInfo[]>([]);
 
-  // Telemetry & analytics data
+  // Telemetry & analytics data (Demo / Static)
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [locations, setLocations] = useState<LocationSummary[]>([]);
   const [measurements, setMeasurements] = useState<RSSIMeasurement[]>([]);
@@ -50,10 +53,9 @@ export const App: React.FC = () => {
   const [interpMethod, setInterpMethod] = useState<string>('linear');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
-  // Prevent multiple simultaneous data loads
   const isFetchingRef = useRef<boolean>(false);
 
-  // Stable function to load all core analytics without cyclic re-renders
+  // Load demo data
   const loadAllData = useCallback(async (sessionId: string | null = null, method: string = 'linear') => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -79,51 +81,37 @@ export const App: React.FC = () => {
       setRecommendations(recs);
       setSessions(sessList);
     } catch (err) {
-      console.error('Error loading data:', err);
+      console.error('Error loading demo data:', err);
     } finally {
       setIsSyncing(false);
       isFetchingRef.current = false;
     }
   }, []);
 
-  // Fetch Serial Status quietly (never touches heatmap or telemetry)
-  const pollSerialStatus = useCallback(async () => {
-    try {
-      const [status, portList] = await Promise.all([
-        api.getSerialStatus().catch(() => null),
-        api.getPorts().catch(() => []),
-      ]);
-      if (status) setSerialStatus(status);
-      setPorts(portList);
-    } catch {
-      // quiet catch
-    }
+  useEffect(() => {
+    loadAllData(activeSessionId, interpMethod);
   }, []);
 
-  // Initial load
   useEffect(() => {
-    pollSerialStatus();
-    loadAllData(activeSessionId, interpMethod);
-  }, []); // Run once on mount
-
-  // When session or interpolation method changes, reload cleanly
-  useEffect(() => {
-    loadAllData(activeSessionId, interpMethod);
-  }, [activeSessionId, interpMethod, loadAllData]);
-
-  // Gentle, stable polling for hardware status every 5 seconds (NO flicker!)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      pollSerialStatus();
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [pollSerialStatus]);
+    if (dataSource === 'demo') {
+      loadAllData(activeSessionId, interpMethod);
+    }
+  }, [activeSessionId, interpMethod, loadAllData, dataSource]);
 
   const handlePointSelect = (x: number, y: number) => {
     setTargetCoords({ x, y, z: 1.0 });
   };
 
-  const isSimulation = summary?.collection_source === 'simulation';
+  // Derive views: strictly isolate demo from live hardware
+  const liveView = useMemo(() => buildLiveView(liveMeasurements), [liveMeasurements]);
+  const visibleSummary = dataSource === 'demo' ? summary : liveView.summary;
+  const visibleLocations = dataSource === 'demo' ? locations : liveView.locations;
+  const visibleMeasurements = dataSource === 'demo' ? measurements : liveMeasurements;
+  const visibleHeatmapData = dataSource === 'demo' ? heatmapData : liveView.heatmap;
+  const visibleRecommendations = dataSource === 'demo' ? recommendations : [];
+  const visibleValidationData = dataSource === 'demo' ? validationData : null;
+  const visibleSessions = dataSource === 'demo' ? sessions : [];
+  const isSimulation = dataSource === 'demo';
 
   return (
     <>
@@ -138,24 +126,28 @@ export const App: React.FC = () => {
         {/* Clean Nav Pills */}
         <nav className="nav-pills">
           <button
+            type="button"
             className={`nav-pill ${activeView === 'map' ? 'active' : ''}`}
             onClick={() => setActiveView('map')}
           >
             Coverage Field
           </button>
           <button
+            type="button"
             className={`nav-pill ${activeView === 'analytics' ? 'active' : ''}`}
             onClick={() => setActiveView('analytics')}
           >
             Signal Intelligence
           </button>
           <button
+            type="button"
             className={`nav-pill ${activeView === 'survey' ? 'active' : ''}`}
             onClick={() => setActiveView('survey')}
           >
             Survey Planner
           </button>
           <button
+            type="button"
             className={`nav-pill ${activeView === 'devices' ? 'active' : ''}`}
             onClick={() => setActiveView('devices')}
           >
@@ -163,20 +155,35 @@ export const App: React.FC = () => {
           </button>
         </nav>
 
-        {/* Status Actions */}
+        {/* Hardware Status & Refresh */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div className="status-pill">
             <span className={`status-dot ${serialStatus.connected ? 'green' : 'gray'}`} />
-            <span>{serialStatus.connected ? serialStatus.node_id || 'ESP32' : 'Hardware Idle'}</span>
+            <span>
+              {serialStatus.connected
+                ? serialStatus.node_id || 'ESP32 Live'
+                : dataSource === 'demo'
+                ? 'Demo Mode'
+                : 'ESP32 Disconnected'}
+            </span>
           </div>
 
           <button
+            type="button"
             className="btn-clean"
-            onClick={() => loadAllData(activeSessionId, interpMethod)}
-            disabled={isSyncing}
-            title="Synchronize telemetry"
+            onClick={() => {
+              if (dataSource === 'demo') void loadAllData(activeSessionId, interpMethod);
+            }}
+            disabled={isSyncing || dataSource === 'live'}
+            title={dataSource === 'demo' ? 'Refresh demo dataset' : 'Live mode uses only serial data'}
           >
-            <span style={{ display: 'inline-block', transform: isSyncing ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}>
+            <span
+              style={{
+                display: 'inline-block',
+                transform: isSyncing ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.3s',
+              }}
+            >
               ↻
             </span>
             <span>Sync</span>
@@ -184,23 +191,63 @@ export const App: React.FC = () => {
         </div>
       </header>
 
+      {/* ── Data Source Mode Toggle Strip ────────────────────────── */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '10px 20px',
+          borderBottom: '1px solid var(--border-subtle)',
+          flexWrap: 'wrap',
+          background: 'var(--surface-sunken)',
+        }}
+      >
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+          Data source:
+        </span>
+        <button
+          type="button"
+          className={'btn-clean ' + (dataSource === 'demo' ? 'btn-clean-primary' : '')}
+          aria-pressed={dataSource === 'demo'}
+          onClick={() => setDataSource('demo')}
+        >
+          📁 Demo Data
+        </button>
+        <button
+          type="button"
+          className={'btn-clean ' + (dataSource === 'live' ? 'btn-clean-primary' : '')}
+          aria-pressed={dataSource === 'live'}
+          onClick={() => setDataSource('live')}
+        >
+          🔌 Live ESP32
+        </button>
+        <span style={{ fontSize: '11px', color: dataSource === 'demo' ? '#d97706' : '#0f9f6e', fontWeight: 600 }}>
+          {dataSource === 'demo'
+            ? 'DEMO / SIMULATED DATA · not live hardware readings'
+            : serialStatus.connected
+            ? 'LIVE HARDWARE MODE · only physical serial readings are shown'
+            : 'LIVE HARDWARE MODE · ESP32 disconnected; connect via Web Serial below'}
+        </span>
+      </div>
+
       {/* ── Minimalist KPI Metric Strip ────────────────────────── */}
       <div className="metric-strip">
         <div className="metric-item">
           <span className="metric-item-label">Samples:</span>
-          <span className="metric-item-value accent">{summary?.total_samples ?? 0}</span>
+          <span className="metric-item-value accent">{visibleSummary?.total_samples ?? 0}</span>
         </div>
 
         <div className="metric-item">
           <span className="metric-item-label">Locations:</span>
-          <span className="metric-item-value">{summary?.total_locations ?? 0} nodes</span>
+          <span className="metric-item-value">{visibleSummary?.total_locations ?? 0} nodes</span>
         </div>
 
         <div className="metric-item">
           <span className="metric-item-label">Mean RSSI:</span>
           <span className="metric-item-value emerald">
-            {summary?.overall_mean_rssi !== null && summary?.overall_mean_rssi !== undefined
-              ? `${summary.overall_mean_rssi.toFixed(1)} dBm`
+            {visibleSummary?.overall_mean_rssi !== null && visibleSummary?.overall_mean_rssi !== undefined
+              ? `${visibleSummary.overall_mean_rssi.toFixed(1)} dBm`
               : 'N/A'}
           </span>
         </div>
@@ -208,15 +255,15 @@ export const App: React.FC = () => {
         <div className="metric-item">
           <span className="metric-item-label">Fading σ:</span>
           <span className="metric-item-value amber">
-            {summary?.overall_std_rssi !== null && summary?.overall_std_rssi !== undefined
-              ? `±${summary.overall_std_rssi.toFixed(1)} dB`
+            {visibleSummary?.overall_std_rssi !== null && visibleSummary?.overall_std_rssi !== undefined
+              ? `±${visibleSummary.overall_std_rssi.toFixed(1)} dB`
               : 'N/A'}
           </span>
         </div>
 
         {isSimulation && (
           <div className="metric-item" style={{ marginLeft: 'auto' }}>
-            <span className="badge-tag sim">Synthetic Demonstration Data</span>
+            <span className="badge-tag sim">DEMO DATA · NOT LIVE</span>
           </div>
         )}
       </div>
@@ -228,7 +275,7 @@ export const App: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="main-side-grid">
               <Heatmap2D
-                data={heatmapData}
+                data={visibleHeatmapData}
                 loading={isSyncing}
                 onMethodChange={setInterpMethod}
                 method={interpMethod}
@@ -237,13 +284,18 @@ export const App: React.FC = () => {
                 onPointClick={handlePointSelect}
               />
 
-              <SerialPanel
-                serialStatus={serialStatus}
-                ports={ports}
-                onRefreshPorts={pollSerialStatus}
-                onRefreshStatus={pollSerialStatus}
-                onMeasurementComplete={() => loadAllData(activeSessionId, interpMethod)}
+              <LiveSerialPanel
+                measurements={liveMeasurements}
                 targetCoords={targetCoords}
+                onMeasurement={(measurement) => {
+                  setDataSource('live');
+                  setLiveMeasurements((current) => [...current, measurement].slice(-2000));
+                }}
+                onConnectionChange={(status) => {
+                  setSerialStatus(status);
+                  if (status.connected) setDataSource('live');
+                }}
+                onClearLiveData={() => setLiveMeasurements([])}
               />
             </div>
 
@@ -251,40 +303,48 @@ export const App: React.FC = () => {
             <div className="clean-card">
               <div className="clean-card-header">
                 <div>
-                  <h3 className="clean-card-title">Recent Survey Telemetry</h3>
-                  <p className="clean-card-subtitle">Timestamped signal captures</p>
+                  <h3 className="clean-card-title">
+                    {dataSource === 'live' ? 'Live Hardware Telemetry' : 'Demo Telemetry Log'}
+                  </h3>
+                  <p className="clean-card-subtitle">
+                    {dataSource === 'live'
+                      ? 'Real-time readings streamed directly from physical ESP32'
+                      : 'Saved sample benchmark records'}
+                  </p>
                 </div>
               </div>
 
-              {measurements.length === 0 ? (
+              {visibleMeasurements.length === 0 ? (
                 <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  No telemetry logged. Connect hardware or generate demo dataset.
+                  No measurements for this data source yet. Connect the ESP32 and acquire samples, or switch to Demo Data for an explicitly simulated example.
                 </div>
               ) : (
                 <table className="clean-table">
                   <thead>
                     <tr>
                       <th>Time</th>
-                      <th>Target SSID</th>
-                      <th>Coordinates</th>
+                      <th>Sample</th>
+                      <th>SSID</th>
+                      <th>Position (X, Y)</th>
                       <th>RSSI</th>
                       <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {measurements.slice(0, 10).map((m, idx) => (
-                      <tr key={idx}>
-                        <td style={{ fontFamily: 'var(--font-mono)' }}>
+                    {visibleMeasurements.slice(0, 10).map((m, idx) => (
+                      <tr key={m.measurement_id || idx}>
+                        <td style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
                           {new Date(m.timestamp_iso).toLocaleTimeString()}
                         </td>
-                        <td>{m.target_ssid || 'Beacon'}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)' }}>
-                          ({m.x_m.toFixed(1)}m, {m.y_m.toFixed(1)}m)
+                        <td>#{m.sample_index}</td>
+                        <td style={{ fontWeight: 600 }}>{m.target_ssid}</td>
+                        <td>
+                          ({m.x_m}m, {m.y_m}m)
                         </td>
                         <td>
                           <span
                             style={{
-                              fontWeight: 600,
+                              fontWeight: 700,
                               color:
                                 m.rssi_dbm === null
                                   ? '#ef4444'
@@ -314,19 +374,16 @@ export const App: React.FC = () => {
 
         {/* VIEW 2: Signal Intelligence & Cross-Validation */}
         {activeView === 'analytics' && (
-          <SignalAnalytics
-            locations={locations}
-            validationData={validationData}
-          />
+          <SignalAnalytics locations={visibleLocations} validationData={visibleValidationData} />
         )}
 
         {/* VIEW 3: Active Survey Planner */}
         {activeView === 'survey' && (
           <SurveyPlanner
-            recommendations={recommendations}
-            locations={locations}
-            roomWidth={heatmapData?.room_width_m || 10}
-            roomLength={heatmapData?.room_length_m || 10}
+            recommendations={visibleRecommendations}
+            locations={visibleLocations}
+            roomWidth={visibleHeatmapData?.room_width_m || 8}
+            roomLength={visibleHeatmapData?.room_length_m || 8}
             onSelectPoint={(x, y) => {
               handlePointSelect(x, y);
               setActiveView('map');
@@ -337,7 +394,7 @@ export const App: React.FC = () => {
         {/* VIEW 4: Devices & Sessions */}
         {activeView === 'devices' && (
           <DataManagementView
-            sessions={sessions}
+            sessions={visibleSessions}
             activeSessionId={activeSessionId}
             onSelectSession={setActiveSessionId}
             onRefreshData={() => loadAllData(activeSessionId, interpMethod)}

@@ -262,6 +262,26 @@ export const Heatmap2D: React.FC<Heatmap2DProps> = ({
         </div>
       </div>
 
+      {data?.warnings && data.warnings.length > 0 && (
+        <div
+          style={{
+            padding: '8px 12px',
+            marginBottom: '10px',
+            background: data.has_sufficient_data ? 'rgba(56, 189, 248, 0.08)' : 'rgba(251, 191, 36, 0.1)',
+            borderLeft: `3px solid ${data.has_sufficient_data ? 'var(--accent-sky)' : 'var(--accent-amber)'}`,
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '11px',
+            color: data.has_sufficient_data ? 'var(--text-secondary)' : '#f59e0b',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span>{data.has_sufficient_data ? 'ℹ️' : '⚠️'}</span>
+          <span>{data.warnings[0]}</span>
+        </div>
+      )}
+
       <div style={{ width: '100%', height: '480px' }}>
         <Plot
           data={plotData}

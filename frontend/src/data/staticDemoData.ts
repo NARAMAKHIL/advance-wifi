@@ -5340,13 +5340,13 @@ export const STATIC_SUMMARY: AnalyticsSummary = {
 };
 
 export const STATIC_SERIAL_STATUS: SerialStatus = {
-  "connected": true,
-  "port": "/dev/tty.usbserial-0001 (Simulated Edge Node)",
+  "connected": false,
+  "port": null,
   "baud_rate": 115200,
-  "device_state": "connected",
-  "node_id": "ESP32_AMRITA_01",
-  "firmware_version": "1.0.0",
-  "last_message_at": "2026-09-29T21:41:10Z"
+  "device_state": "disconnected",
+  "node_id": "",
+  "firmware_version": "",
+  "last_message_at": null
 };
 
 export const STATIC_PORTS: PortInfo[] = [

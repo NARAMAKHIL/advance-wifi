@@ -8,6 +8,8 @@
 ### 🌐 Live Dashboard & Mid-Project Review Deliverables
 
 * **Live Web Dashboard (GitHub Pages):** [https://naramakhil.github.io/advance-wifi/](https://naramakhil.github.io/advance-wifi/)
+* **Live Hardware Setup & Web Serial Guide:** [`docs/LIVE_HARDWARE_GUIDE.md`](file:///Users/kaush/Downloads/advanced-wifi-speed-meter/docs/LIVE_HARDWARE_GUIDE.md)
+* **Python ESP32 CSV Logger:** [`scripts/esp32_csv_logger.py`](file:///Users/kaush/Downloads/advanced-wifi-speed-meter/scripts/esp32_csv_logger.py)
 * **12-Slide PowerPoint Presentation (.pptx):** [`docs/SDC_Mid_Project_Review_WiFi_RSSI_Mapping.pptx`](file:///Users/kaush/Downloads/advanced-wifi-speed-meter/docs/SDC_Mid_Project_Review_WiFi_RSSI_Mapping.pptx)
 * **Presentation Script & Viva Defense Guide:** [`docs/MID_PROJECT_REVIEW_PPT_CONTENT.md`](file:///Users/kaush/Downloads/advanced-wifi-speed-meter/docs/MID_PROJECT_REVIEW_PPT_CONTENT.md)
 * **Complete MATLAB Wireless Propagation Suite:** [`matlab/HOW_TO_RUN_MATLAB.md`](file:///Users/kaush/Downloads/advanced-wifi-speed-meter/matlab/HOW_TO_RUN_MATLAB.md)
@@ -141,7 +143,9 @@ advanced-wifi-speed-meter/
 │   ├── run_backend.sh             # Launch FastAPI server
 │   ├── run_frontend.sh            # Launch React dev server
 │   ├── test_all.sh                # Run Python and frontend test suites
-│   └── generate_demo_data.py      # CLI demo dataset generator
+│   ├── generate_demo_data.py      # CLI demo dataset generator
+│   ├── esp32_csv_logger.py        # Python command-line ESP32 serial CSV collector
+│   └── apply_wifisense_fix.py     # Automated patch & static bundle builder
 └── data/
     ├── real/                      # Real ESP32 survey CSV files
     └── synthetic_demo/            # Simulated survey CSV datasets
@@ -203,6 +207,28 @@ cd ('matlab')
 run_all_analytics
 ```
 This generates publication-ready figures for empirical path loss, 4-way interpolation contours, and multilateration ranging circles.
+
+---
+
+### 5. Live ESP32 Hardware Data Collection
+
+You can collect live RSSI telemetry from a physical ESP32 using either method:
+
+#### Option A: Direct Web Serial in Browser (No Python Required)
+1. Flash `firmware/wifisense_esp32/wifisense_esp32.ino` to the ESP32 via Arduino IDE (requires `ArduinoJson 7.x` at 115200 baud).
+2. Close the Arduino Serial Monitor so the COM port is free.
+3. Open [WiFiSense 3D](https://naramakhil.github.io/advance-wifi/) in desktop **Chrome** or **Edge** over HTTPS.
+4. Click **`🔌 Live ESP32`** → **`Connect ESP32`**, and select your board in the browser USB permission dialog.
+5. Enter the target SSID and survey coordinates $(X, Y, Z)$ and click **`Acquire point samples`**.
+6. Click **`Download live CSV`** to export real measurements anytime.
+*(Note: Spatial 2D heatmaps are rendered once readings exist at $\ge 3$ non-collinear coordinates).*
+
+#### Option B: Standalone Python CSV Logger (Laptop Collection)
+```bash
+python -m pip install pyserial
+python scripts/esp32_csv_logger.py --port COM6 --ssid "Your Wi-Fi SSID" --x 0 --y 0 --count 10 --interval-ms 5000
+```
+This streams measurements directly into a local CSV on your laptop for MATLAB processing.
 
 ---
 

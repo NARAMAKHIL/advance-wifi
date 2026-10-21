@@ -57,7 +57,7 @@ export const api = {
       status: 'ok',
       version: '1.0.0 (Static Dashboard)',
       uptime_seconds: 3600,
-      serial_connected: true,
+      serial_connected: false,
       data_points: STATIC_MEASUREMENTS.length,
     };
     return fetchJson<HealthResponse>(`${BASE_URL}/health`, undefined, fallback);
@@ -73,44 +73,19 @@ export const api = {
   },
 
   async connectSerial(port: string, baud_rate: number = 115200): Promise<SerialStatus> {
-    const fallback: SerialStatus = {
-      ...STATIC_SERIAL_STATUS,
-      connected: true,
-      port,
-      baud_rate,
-      device_state: 'connected',
-    };
-    return fetchJson<SerialStatus>(
-      `${BASE_URL}/serial/connect`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ port, baud_rate }),
-      },
-      fallback
-    );
+    return fetchJson<SerialStatus>(`${BASE_URL}/serial/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ port, baud_rate }),
+    });
   },
 
   async disconnectSerial(): Promise<SerialStatus> {
-    const fallback: SerialStatus = {
-      ...STATIC_SERIAL_STATUS,
-      connected: false,
-      port: null,
-      device_state: 'disconnected',
-    };
-    return fetchJson<SerialStatus>(
-      `${BASE_URL}/serial/disconnect`,
-      { method: 'POST' },
-      fallback
-    );
+    return fetchJson<SerialStatus>(`${BASE_URL}/serial/disconnect`, { method: 'POST' });
   },
 
   async scanNetworks(): Promise<{ status: string }> {
-    return fetchJson<{ status: string }>(
-      `${BASE_URL}/serial/scan`,
-      { method: 'POST' },
-      { status: 'scan_complete (simulated on GitHub Pages)' }
-    );
+    return fetchJson<{ status: string }>(`${BASE_URL}/serial/scan`, { method: 'POST' });
   },
 
   // Measurements
@@ -119,28 +94,15 @@ export const api = {
     session_id: string;
     measurement_id: string;
   }> {
-    const fallback = {
-      status: 'started',
-      session_id: request.session_id || 'session_amrita_b244',
-      measurement_id: `meas_${Date.now()}`,
-    };
-    return fetchJson(
-      `${BASE_URL}/measurements/start`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      },
-      fallback
-    );
+    return fetchJson(`${BASE_URL}/measurements/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
   },
 
   async stopMeasurement(): Promise<{ status: string }> {
-    return fetchJson<{ status: string }>(
-      `${BASE_URL}/measurements/stop`,
-      { method: 'POST' },
-      { status: 'stopped' }
-    );
+    return fetchJson<{ status: string }>(`${BASE_URL}/measurements/stop`, { method: 'POST' });
   },
 
   async getMeasurements(sessionId?: string, limit: number = 500): Promise<RSSIMeasurement[]> {
